@@ -1,0 +1,14 @@
+\chapter*{Abstract}
+
+This report details the development of an autonomous driving system implemented on a modified utility golf cart.
+The system described implements both low level and high level control, realized by a Texas Instruments c2000 series
+microcontroller, and a Jetson edge computing device. The low level controller interfaces with the golf cart that has been modified 
+in a drive-by-wire style to allow for automated control of steering, throttle, and brake. Likewise, the high level controller
+interfaces with the c2000 by providing it with velocity and steering angle setpoints, deriving these from a GPS based
+waypoint follower.
+
+To support controller design, a planar vehicle model is derived that encompasses the longitudinal dynamics and lateral kinematics. This
+model forms the basis for the controller and simulation design. The simulation is used for controller tuning and algorithm verification before
+deployment to the physical golfcart. 
+
+\clearpage

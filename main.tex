@@ -1,0 +1,46 @@
+\documentclass[12pt]{report}
+
+% Package imports and custom commands
+\input{header/packages}
+\input{header/commands}
+
+\begin{document}
+
+% Front matter
+\input{frontmatter/titlepage}
+
+\setlength{\parskip}{\baselineskip}
+\input{frontmatter/abstract}
+
+% Organizational pages
+\setlength{\parskip}{0pt}
+\tableofcontents
+\listoffigures
+\listoftables
+
+\input{frontmatter/nomenclature}
+
+% Main chapters
+\setlength{\parskip}{\baselineskip}
+\input{chapters/intro}
+\input{chapters/system_overview}
+\input{chapters/rework}
+\input{chapters/modeling}
+\input{chapters/low_level_control}
+\input{chapters/c2000_implementation}
+\input{chapters/simulation}
+\input{chapters/high_level_control}
+\input{chapters/results}
+\input{chapters/conclusions}
+
+% Bibliography
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+% Appendices
+\appendix
+\input{appendices/derivations}
+\input{appendices/vehicle_params}
+\input{appendices/diagrams}
+
+\end{document}
