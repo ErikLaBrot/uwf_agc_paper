@@ -1,11 +1,72 @@
 \chapter*{Nomenclature}
 To contain a list of all symbols and their definitions used in the report.
 
-\begin{tabular}{ll}
-    $m$      & Vehicle mass \\
-    $v$      & Longitudinal velocity \\
-    $F_{\text{drive}}$ & Driving force at the wheels \\
-    $F_{\text{brake}}$ & Braking force at the wheels \\
-\end{tabular}
+% ------------------ Planar / Kinematic Model ------------------
+\begin{table}[h]
+    \centering
+    \caption{Symbols used in the planar configuration, frames, and state--space model}
+    \begin{tabular}{ll}
+        \hline
+        Symbol & Description \\
+        \hline
+        % --- States and derivatives ---
+        $x$ & $x$-position of vehicle reference point in $\{W\}$, $\mathrm{m}$ \\
+        $y$ & $y$-position of vehicle reference point in $\{W\}$, $\mathrm{m}$ \\
+        $\psi$ & Yaw heading of the vehicle w.r.t.\ $\{W\}$, $\mathrm{rad}$ \\
+        $v$ & Vehicle longitudinal speed along body $x$-axis, $\mathrm{m/s}$ \\
+        $\dot x$ & Time derivative of $x$, $\mathrm{m/s}$ \\
+        $\dot y$ & Time derivative of $y$, $\mathrm{m/s}$ \\
+        $\dot \psi$ & Yaw rate, $\mathrm{rad/s}$ \\
+        $\dot v$ & Vehicle longitudinal acceleration, $\mathrm{m/s^2}$ \\
+        % --- Inputs ---
+        $\delta$ & Front wheel steering angle, $\mathrm{rad}$ \\
+        % --- Geometry and motion ---
+        $L$ & Wheelbase of the vehicle, $\mathrm{m}$ \\
+        $O$ & Instantaneous centre of rotation of the vehicle \\
+        $R$ & Distance from $O$ to the vehicle reference point (radius of rotation), $\mathrm{m}$ \\
+        $\theta$ & Road grade angle (inclination of terrain), $\mathrm{rad}$ \\
+        % --- Vectors and mappings ---
+        $\mathbf{q}$ & Lateral configuration vector, $[x\; y\; \psi]^\top$ \\
+        $\mathbf{x}$ & State vector of planar model, $[x\; y\; \psi\; v]^\top$ \\
+        $\mathbf{u}$ & Control input vector, $[T_\text{motor}\; T_\text{brake}\; \delta]^\top$ \\
+        $\mathbf{f}(\mathbf{x},\mathbf{u})$ & Nonlinear state--space dynamics, $\dot{\mathbf{x}}=\mathbf{f}(\mathbf{x},\mathbf{u})$ \\
+        % --- Frames ---
+        $\{W\}$ & World (inertial) reference frame \\
+        $\{B\}$ & Body-fixed reference frame attached to the vehicle \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\clearpage
+
+% ------------------ Longitudinal Dynamics ------------------
+\begin{table}[h]
+    \centering
+    \caption{Symbols used in the longitudinal dynamics model}
+    \begin{tabular}{ll}
+        \hline
+        Symbol & Description \\
+        \hline
+        % --- Forces ---
+        $F_x$ & Net longitudinal force acting on the vehicle, $\mathrm{N}$ \\
+        $F_\text{drive}$ & Driving force at the tire--road interface, $\mathrm{N}$ \\
+        $F_\text{brake}$ & Braking force at the tire--road interface, $\mathrm{N}$ \\
+        $F_\text{roll}$ & Rolling resistance force, $\mathrm{N}$ \\
+        % --- Vehicle and wheel parameters ---
+        $m$ & Vehicle mass, $\mathrm{kg}$ \\
+        $J_\text{eq}$ & Equivalent rotational inertia of wheels and hubs, referred to the wheel, $\mathrm{kg\,m^2}$ \\
+        $r_w$ & Effective wheel radius, $\mathrm{m}$ \\
+        $m_\text{eq}$ & Equivalent mass including rotational inertia, $\mathrm{kg}$ \\
+        % --- Torques / inputs ---
+        $T_\text{motor}$ & Drive motor shaft torque, $\mathrm{N\,m}$ \\
+        $T_\text{brake}$ & Brake torque applied at the wheel(s), $\mathrm{N\,m}$ \\
+        % --- Driveline and resistance parameters ---
+        $i_\text{tot}$ & Total gear ratio (motor to wheel), dimensionless \\
+        $\eta_d$ & Total driveline efficiency, dimensionless \\
+        $C_{rr}$ & Rolling resistance coefficient, dimensionless \\
+        $g$ & Gravitational acceleration, $\mathrm{m/s^2}$ \\
+        \hline
+    \end{tabular}
+\end{table}
 
 \clearpage
