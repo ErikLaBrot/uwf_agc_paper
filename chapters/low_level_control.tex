@@ -1,14 +1,272 @@
-\chapter{Low Level Control Design}
-[Derive low level control analytically from mathematical model]
+%Shift around citations. Maybe cite Nise and Franklin? Double check where I'm citing Iannou. Most of this is fairly bogstandard controls math though.
+%Draw up some system block diagrams to pad stuff out. That'd be dope I think
+\chapter{Low-Level Control Design}
+\label{chap:low_level_control}
 
-\section{Velocity Control}
-[Introduce velocity control as MISO seperated into 2 SISO by domain]
+This chapter presents the low-level controllers used to regulate the golf cart's
+longitudinal speed and steering angle. The combined planar model in
+Chapter~\ref{modeling} provides the relationship between motor torque, brake
+torque, steering angle, and platform motion. That model is used here as the basis
+for control design.
 
-\subsection{Drive Motor Controller}
-[derive pi controller for drive torque]
+This control layer maps a speed setpoint $v^*(t)$ and a steering setpoitn
+$\delta^*(t)$ to actuator commands for the traction motor, friction brake, and
+steering motor. Three controllers are used:
 
-\subsection{Brake Force Controller}
-[derive pi controller for brake actuator]
+\begin{itemize}
+  \item a drive motor controller that regulates longitudinal speed using motor
+        torque,
+  \item a brake controller that regulates longitudinal speed using friction
+        brake torque,
+  \item a steering controller that regulates the front wheel steering angle.
+\end{itemize}
 
-\section{Steering Control}
-[derive pi controller for steering motor]
+\section{Control Objectives and Architecture}
+\label{sec:control_objectives}
+
+The low-level control layer has two main objectives:
+
+\begin{enumerate}
+  \item Track a commanded longitudinal speed $v^*(t)$ in the operating region
+        $0 \le v \le 20~\mathrm{mph}$ using the traction motor and friction brake.
+  \item Track a commanded steering angle $\delta^*(t)$ of the front axle,
+        consistent with the kinematic bicycle model in
+        Section~\ref{lateral_kinematics}.
+\end{enumerate}
+
+A high-level controller generates the setpoints $v^*(t)$ and
+$\delta^*(t)$ based on its internal error minimization calculations. The low-level controllers operate on
+the tracking errors
+\begin{equation}
+    e_v(t) = v^*(t) - v(t),
+    \qquad
+    e_\delta(t) = \delta^*(t) - \delta(t),
+    \label{eq:ctrl_errors}
+\end{equation}
+and produce commands for the motor controller, brake actuator, and steering
+drive.
+
+The longitudinal loop behaves similar to a cruise–control style system, with a speed
+regulator acting on throttle and brake and a higher-level module providing
+$v^*(t)$. The steering controller acts as a position servo for $\delta$.
+
+The following control-specific assumptions are made:
+
+\begin{itemize}
+  \item The Kelly KLS motor controller and traction motor are modeled as an
+        approximately linear gain between a normalized motor command and an
+        effective drive torque. The brake actuator is modeled in the same way
+        for brake torque.
+  \item The design is restricted to forward motion; behavior very close to
+        zero speed is handled by a stopped/hold mode in implementation.
+\end{itemize}
+
+\section{Longitudinal Speed Controller Design}
+\label{sec:longitudinal_control}
+
+The longitudinal dynamics in Section~\ref{longitudinal_dynamics} and
+Section~\ref{combined_model} can be written as
+\begin{equation}
+    \dot v =
+    \frac{\eta_d i_{\text{tot}}}{m_\text{eq} r_w}\,T_\text{motor}
+    - \frac{1}{m_\text{eq} r_w}\,T_\text{brake}
+    - \frac{C_{rr} m g}{m_\text{eq}},
+    \label{eq:long_ctrl_full}
+\end{equation}
+where $T_\text{motor}$ and $T_\text{brake}$ are the effective wheel torques.
+The rolling resistance term is treated as a constant disturbance for a given
+operating condition.
+
+The dynamic model can be simplified based on the domain the error signal exists in.
+Let $u_\text{th} \in [0,1]$ and $u_\text{br} \in [0,1]$
+be normalized throttle and brake commands. In the drive domain (brake
+released) and the brake domain (throttle released), the dynamics are modeled as
+\begin{align}
+    \dot v &= g_d\,u_\text{th} - d,
+    && \text{(drive domain)},
+    \label{eq:drive_domain_plant} \\[0.25em]
+    \dot v &= - g_b\,u_\text{br} - d,
+    && \text{(brake domain)},
+    \label{eq:brake_domain_plant}
+\end{align}
+where $g_d > 0$ and $g_b > 0$ are effectively gains and $d$ collects the rolling
+resistance contribution. The corresponding transfer functions from command to
+speed (with $d$ neglected in the nominal model) are
+\begin{equation}
+    G_d(s) = \frac{V(s)}{U_\text{th}(s)} = \frac{g_d}{s},
+    \qquad
+    G_b(s) = \frac{V(s)}{U_\text{br}(s)} = -\,\frac{g_b}{s}.
+    \label{eq:long_plant_tf}
+\end{equation}
+
+Domain separation between drive and brake is implemented by a simple deadband
+on the speed error. Let $e_v = v^* - v$. Then
+\begin{equation}
+    T_\text{motor}(t) =
+    \begin{cases}
+        T_\text{drive}(t), & e_v(t) > \Delta_v, \\
+        0,                 & e_v(t) \le \Delta_v,
+    \end{cases}
+    \qquad
+    T_\text{brake}(t) =
+    \begin{cases}
+        T_\text{brake,cmd}(t), & e_v(t) < -\Delta_v, \\
+        0,                      & e_v(t) \ge -\Delta_v,
+    \end{cases}
+    \label{eq:domain_switching_ctrl}
+\end{equation}
+where $\Delta_v$ is a small deadband threshold, and $T_\text{drive}$ and
+$T_\text{brake,cmd}$ are proportional to $u_\text{th}$ and $u_\text{br}$ through
+the actuator gains.
+
+\subsection{Drive Motor PI Controller}
+\label{subsec:drive_controller}
+
+In the drive domain, the plant is the integrator
+\begin{equation}
+    G_d(s) = \frac{g_d}{s}.
+\end{equation}
+The drive controller is a PI compensator acting on the error $e_v = v^* - v$
+with transfer function
+\begin{equation}
+    C_v(s) = K_{p,v} + \frac{K_{i,v}}{s}.
+    \label{eq:drive_pi_tf}
+\end{equation}
+
+With unity feedback, the closed-loop transfer function from $v^*$ to $v$ is
+\begin{equation}
+    \frac{V(s)}{V^*(s)} =
+    \frac{C_v(s) G_d(s)}{1 + C_v(s) G_d(s)} =
+    \frac{g_d\bigl(K_{p,v} s + K_{i,v}\bigr)}
+         {s^2 + g_d K_{p,v} s + g_d K_{i,v}}.
+    \label{eq:drive_cl_tf}
+\end{equation}
+The denominator in \eqref{eq:drive_cl_tf} defines the closed-loop
+characteristic polynomial
+\begin{equation}
+    s^2 + g_d K_{p,v}\,s + g_d K_{i,v} = 0.
+    \label{eq:drive_char_poly}
+\end{equation}
+
+To obtain a desired second-order response, \eqref{eq:drive_char_poly} is
+matched to
+\begin{equation}
+    s^2 + 2 \zeta_v \omega_{n,v} s + \omega_{n,v}^2 = 0,
+    \label{eq:second_order_form}
+\end{equation}
+where $\zeta_v$ is the damping ratio and $\omega_{n,v}$ is the natural
+frequency of the speed loop. Equating coefficients gives
+\begin{equation}
+    K_{p,v} = \frac{2 \zeta_v \omega_{n,v}}{g_d},
+    \qquad
+    K_{i,v} = \frac{\omega_{n,v}^2}{g_d}.
+    \label{eq:drive_gains}
+\end{equation}
+
+Integral action in $C_v(s)$ cancels the steady-state effect of the constant
+disturbance $d$ in \eqref{eq:drive_domain_plant} for step changes in the speed
+setpoint.
+
+\subsection{Brake PI Controller}
+\label{subsec:brake_controller}
+
+In the brake domain, the plant is
+\begin{equation}
+    G_b(s) = -\,\frac{g_b}{s}.
+\end{equation}
+The brake loop uses a PI controller acting on the error
+\begin{equation}
+    e_b(t) = v(t) - v^*(t),
+    \label{eq:brake_error}
+\end{equation}
+which is positive when the vehicle is faster than the setpoint. The controller
+transfer function is
+\begin{equation}
+    C_b(s) = K_{p,b} + \frac{K_{i,b}}{s}.
+    \label{eq:brake_pi_tf}
+\end{equation}
+
+With unity feedback and the sign convention in \eqref{eq:brake_error}, the
+closed-loop characteristic polynomial again takes the form
+\begin{equation}
+    s^2 + g_b K_{p,b}\,s + g_b K_{i,b} = 0.
+\end{equation}
+Matching to \eqref{eq:second_order_form} yields
+\begin{equation}
+    K_{p,b} = \frac{2 \zeta_b \omega_{n,b}}{g_b},
+    \qquad
+    K_{i,b} = \frac{\omega_{n,b}^2}{g_b},
+    \label{eq:brake_gains}
+\end{equation}
+with $(\zeta_b,\omega_{n,b})$ chosen separately from the drive loop. In
+practice, braking is tuned to be more heavily damped (larger $\zeta_b$) and
+sometimes slower (smaller $\omega_{n,b}$) than throttle actuation to improve
+ride comfort and limit jerk \cite{rajamani,ioannou_xu}.
+
+\section{Steering Controller Design}
+\label{sec:steering_control}
+
+The steering controller regulates the front wheel steering angle $\delta$ to
+track a setpoint $\delta^*(t)$ generated by the high-level lateral controller.
+At the hardware level, the steering column is driven by a DC motor through a
+motor controller.
+
+The steering mechanism is modeled as a first-order integrator,
+\begin{equation}
+    \dot \delta(t) = k_s\,u_\delta(t),
+    \label{eq:steering_plant}
+\end{equation}
+where $u_\delta$ is a normalized steering command and $k_s > 0$ is an effective
+gain. The corresponding steering plant transfer function is
+\begin{equation}
+    G_s(s) = \frac{\Delta(s)}{U_\delta(s)} = \frac{k_s}{s},
+    \label{eq:steering_plant_tf}
+\end{equation}
+where $\Delta(s)$ and $U_\delta(s)$ are the Laplace transforms of $\delta(t)$
+and $u_\delta(t)$, respectively.
+
+\subsection{Steering PI Controller}
+\label{subsec:steering_pi}
+
+The steering error is defined as
+\begin{equation}
+    e_\delta(t) = \delta^*(t) - \delta(t),
+    \label{eq:steering_error}
+\end{equation}
+and the controller uses a PI structure with transfer function
+\begin{equation}
+    C_\delta(s) = K_{p,\delta} + \frac{K_{i,\delta}}{s}.
+    \label{eq:steering_pi_tf}
+\end{equation}
+
+With unity feedback and plant \eqref{eq:steering_plant_tf}, the closed-loop
+transfer function from $\delta^*$ to $\delta$ is
+\begin{equation}
+    \frac{\Delta(s)}{\Delta^*(s)} =
+    \frac{C_\delta(s) G_s(s)}{1 + C_\delta(s) G_s(s)} =
+    \frac{k_s\bigl(K_{p,\delta} s + K_{i,\delta}\bigr)}
+         {s^2 + k_s K_{p,\delta} s + k_s K_{i,\delta}}.
+    \label{eq:steering_cl_tf}
+\end{equation}
+The denominator defines the closed-loop characteristic polynomial
+\begin{equation}
+    s^2 + k_s K_{p,\delta}\,s + k_s K_{i,\delta} = 0.
+\end{equation}
+
+Matching to the standard second-order form \eqref{eq:second_order_form} gives
+\begin{equation}
+    K_{p,\delta} = \frac{2 \zeta_\delta \omega_{n,\delta}}{k_s},
+    \qquad
+    K_{i,\delta} = \frac{\omega_{n,\delta}^2}{k_s},
+    \label{eq:steering_gains}
+\end{equation}
+where $(\zeta_\delta,\omega_{n,\delta})$ are the damping ratio and natural
+frequency of the steering loop.
+
+\section{Summary}
+\label{sec:control_summary}
+
+This chapter presented the low-level control design for the golf cart platform using the combined planar model in
+Chapter~\ref{modeling} as a basis. The equations outlined above describe the systems by which the platform 
+translates its desired high level setpoints into motion of the platform by way of the low level control systems, constructed 
+as standard PI controllers, map measured error to actuator input.
