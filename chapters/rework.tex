@@ -1,12 +1,35 @@
 \chapter{Vehicle Hardware Rework}
-
 [Go from initial condition of the vehicle to current state. Rewire etc.]
+This section details the work done on the platform to convert it from the original control
+systems to the updated control systems. This work encompasses component selection, electrical rework,
+and  installation of new components. The original state of the vehicle is described, and a narrative 
+of the process is provided.
 
 \section{Initial Vehicle Condition}
 [Describe as-is vehicle state at project start]
+The initial vehicle condition had all power and signal wiring for the platform routed through plastic cable harnessing.
+Wires were routed end to end and spliced mid-harness to make connections between platform level components, low-level components,
+and high-level components. Evaluating this design, it was found to have accrued damage over time in the form of wire shorts and frays.
 
+%What else should go here?
 \section{Component Update}
 [Discuss updated components (arduino/rpi to c2000/jetson)]
+Originally, the low level control system was comprised of several arduino 8-bit microcontrollers slaved to an ESP32 32-bit microcontroller.
+This system was evaluated, and determined to be entirely upgradeable to a single C2000 based microcontroller. The interfaces that the new microcontroller
+overtakes are as follows:
+- Drive Motor Controller interface
+- Brake Actuator interface
+- Throttle Pedal interface
+- Steering Motor Controller interface
+- Steering Shaft Encoder interface
+- High-Level to Low-Level bridge interface
+
+Additionally, the high-level system originally comprised of a raspberry pi compute module connected to an Apple iMac Desktop. This 
+has been replaced with a single NVIDIA Jetson Orin Nano compute module. This compute module handles the following responsibilities:
+- High-Level sensor monitoring such as GPS and LiDAR
+- Complex algorithm calculation such as path planning and obstacle detection/avoidance
 
 \section{Electrical Rework}
 [Discuss golfcart rewire from wiring harness to DIN rails]
+The physical platform was ultimately rewired. The wiring harness was converted to DIN rails. This is effectively a conversion from point to point 
+wiring to a bus sytle system. The advantages to this are that it enables alterations and extensions of the current design to be modular and straightforward.

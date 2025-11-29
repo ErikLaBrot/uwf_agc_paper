@@ -1,15 +1,45 @@
 \chapter{System Overview}
-
-High level description for the golf cart
+[High level description for the golf cart]
+The platform consists of the combination of the physical golf cart, and the modifications made
+to the original design. Since its acquisition from the manufacturer, the platform has undergone
+several alterations and overhauls that occured prior to this project. A summarization of the current state 
+of the platform is the focus of this chapter.
 
 \section{Vehicle Platform}
-
 [Physical platform as received, brief overview of modifications physical modifications]
+The physical component of the platform is comprised of a modified Club Car Pioneer 1200. Originally, the platform
+was an internal combustion engine powered utility class golf cart. Since then, it has been modified in the following
+manners:
+- The engine has been swapped out for a 10kW permanent magnet AC motor
+- A 48V sinusoidal motor controller with supporting electronics has been installed
+- The steering column has been modified with a linkage to a DC motor
+- A linear actuation system has been attached to the vehicle's brake actuation pedal
 
 \section{Sensing and Computation}
-
 [Describe sensors and computational hardware on the vehicle]
+At the beginning of this stage of the project, the golf cart computational stack was comprised of 
+multiple 8-bit microcontrollers to interface with actuators slaved to a 32-bit microcontroller. These were
+the original low level control system's computer hardware. This has since been replaced with a single 32-bit 
+microcontroller, a TI F28379D launchpad based on the C2000 architecture.
+
+Additionally, the platform had an Apple iMac interfaced with a raspberry pi to comprise the high-level control systemm.
+This has been replaced with a NVIDIA Jetson Orin Nano as the high level controller.
+
+For sensors, the platform has the following:
+- Sick LMS200 LiDAR
+- GPS
 
 \section{Control Architecture}
-
 [Describe the control architecture in terms of components (e.g.\ high-level, low level, simulation, etc)]
+A brief overview of the control systems can be viewed as high-level, low-level, and platform level. 
+The high-level control system focuses on controlling position of the cart, referenced externally to GPS, and performing
+computationally taxing tasks such as obstacle avoidance and path planning.
+
+The low-level control system focuses on ensuring that the speed and steering angle control of the platform is sufficiently 
+linearized such that high level control is simplified. This acts as a translation layer that will allow the high level control 
+system to command a velocity setpoint for the platform, and the appropriate forces will be applied to the wheels and steering 
+columns such that the velocity is met. 
+
+The platform level is comprised of the motors, drivetrains, and motor controllers attached to the cart. These represent the 
+kinematics and dynamics of the golf cart, and encompass how when a specific torque is commanded from a motor, how that torque is 
+produced.
