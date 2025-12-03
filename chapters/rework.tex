@@ -1,35 +1,106 @@
 \chapter{Vehicle Hardware Rework}
-[Go from initial condition of the vehicle to current state. Rewire etc.]
-This section details the work done on the platform to convert it from the original control
-systems to the updated control systems. This work encompasses component selection, electrical rework,
-and  installation of new components. The original state of the vehicle is described, and a narrative 
-of the process is provided.
+\label{chap:rework}
+
+This chapter describes the changes made to the physical platform to support the
+control and software design in later chapters. The focus is on the control
+hardware update and the electrical rework that provides a more robust interface
+between the vehicle, the C2000 microcontroller, and the Jetson.
 
 \section{Initial Vehicle Condition}
-[Describe as-is vehicle state at project start]
-The initial vehicle condition had all power and signal wiring for the platform routed through plastic cable harnessing.
-Wires were routed end to end and spliced mid-harness to make connections between platform level components, low-level components,
-and high-level components. Evaluating this design, it was found to have accrued damage over time in the form of wire shorts and frays.
+\label{sec:rework_initial}
 
-%What else should go here?
-\section{Component Update}
-[Discuss updated components (arduino/rpi to c2000/jetson)]
-Originally, the low level control system was comprised of several arduino 8-bit microcontrollers slaved to an ESP32 32-bit microcontroller.
-This system was evaluated, and determined to be entirely upgradeable to a single C2000 based microcontroller. The interfaces that the new microcontroller
-overtakes are as follows:
-- Drive Motor Controller interface
-- Brake Actuator interface
-- Throttle Pedal interface
-- Steering Motor Controller interface
-- Steering Shaft Encoder interface
-- High-Level to Low-Level bridge interface
+When this stage of the project began, the cart had already been converted from
+its original gasoline drivetrain to an electric traction system. The vehicle
+carried a traction battery pack, a motor controller, steering and brake
+actuators, and an assortment of low level control boards.
 
-Additionally, the high-level system originally comprised of a raspberry pi compute module connected to an Apple iMac Desktop. This 
-has been replaced with a single NVIDIA Jetson Orin Nano compute module. This compute module handles the following responsibilities:
-- High-Level sensor monitoring such as GPS and LiDAR
-- Complex algorithm calculation such as path planning and obstacle detection/avoidance
+Power and signal wiring were routed along the frame in plastic cable harnesses.
+Most connections were made point-to-point. New devices were added by splicing
+into existing runs and extending the harness. The result worked, but it was
+not easy to trace individual circuits or change control hardware without
+disturbing other parts of the system.
+
+For the control work in this report, it was more effective to replace this
+wiring approach than to continue to extend it. The goal of the rework was to
+create a layout that is easier to understand, document, and maintain.
+
+\section{Control Hardware Update}
+\label{sec:rework_control_hw}
+
+The original low level control used multiple microcontrollers. Several
+Arduino-class 8-bit boards handled local actuator and sensor tasks, and an
+ESP32 acted as a coordinator between them and the higher level computer. This
+distributed arrangement increased the number of devices that had to be
+configured and maintained.
+
+In the updated design, these boards are replaced by a single TI F28379D
+C2000-based controller. The C2000 is responsible for:
+
+\begin{itemize}
+    \item generating throttle and brake commands for the traction inverter,
+    \item commanding the steering actuator and reading the steering encoder,
+    \item reading speed feedback from the drive motor encoder,
+    \item exchanging speed and steering setpoints with the Jetson over serial.
+\end{itemize}
+
+Using one controller for all low level tasks simplifies both hardware and
+software. All actuator interfaces, feedback signals, and control logic reside
+on a single board. This matches the control structure used in the modeling and
+low level controller design chapters.
+
+On the high level side, an NVIDIA Jetson Orin Nano serves as the primary
+compute unit for autonomous navigation. The Jetson connects to the C2000
+through a USB–serial link and to sensors such as GPS, compass, and LiDAR
+through their respective interfaces. The rework ensures that these connections
+terminate on clear, labeled points instead of ad hoc splices.
 
 \section{Electrical Rework}
-[Discuss golfcart rewire from wiring harness to DIN rails]
-The physical platform was ultimately rewired. The wiring harness was converted to DIN rails. This is effectively a conversion from point to point 
-wiring to a bus sytle system. The advantages to this are that it enables alterations and extensions of the current design to be modular and straightforward.
+\label{sec:rework_electrical}
+
+The electrical rework centers on moving from embedded harness splices to a
+panel-based layout using DIN rail and terminal blocks. Power distribution,
+signal routing, and controller connections are brought into a single point
+mounted on the vehicle.
+
+The main elements of the new layout are:
+
+\begin{itemize}
+    \item a set of DIN-rail mounted terminal blocks for traction battery,
+          low voltage supply, and signal wiring,
+    \item dedicated terminals for each actuator and sensor connection
+          (traction inverter, steering motor, brake actuator, encoders,
+          GPS, compass, LiDAR),
+    \item separation of high-current power runs from low-voltage control and
+          sensor wiring,
+    \item labeled jumpers and fusing for the 12~V and 5~V control supplies.
+\end{itemize}
+
+The C2000 and Jetson are wired into this panel rather than directly into the
+vehicle harness. Each I/O line from the controllers appears on a labeled
+terminal, then routes outward to the corresponding device. This provides a
+single place to probe signals, insert temporary instrumentation, or reroute
+connections during testing.
+
+The traction battery feeds a DC–DC converter that supplies the low voltage
+control bus. From there, regulated rails are distributed through the terminal
+blocks to the motor controller, actuators, and sensors. This arrangement keeps
+the power path explicit and makes it clear which devices share a supply.
+
+\section{Resulting Platform}
+\label{sec:rework_result}
+
+The hardware rework produces a vehicle that is easier to work with at the
+control level. The main improvements are:
+
+\begin{itemize}
+    \item low level control consolidated on the C2000,
+    \item a clear electrical interface between the vehicle, the C2000, and the
+          Jetson,
+    \item panel-based power and signal distribution with labeled terminals,
+    \item reduced dependence on in-harness splices and undocumented wiring.
+\end{itemize}
+
+This design supports the modeling, controller design, and implementation
+work in the following chapters. It also provides future work a defined set of
+connection points for adding sensors, actuators, or safety systems without
+repeating another full wiring rework.

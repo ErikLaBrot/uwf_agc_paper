@@ -1,45 +1,91 @@
 \chapter{System Overview}
-[High level description for the golf cart]
-The platform consists of the combination of the physical golf cart, and the modifications made
-to the original design. Since its acquisition from the manufacturer, the platform has undergone
-several alterations and overhauls that occured prior to this project. A summarization of the current state 
-of the platform is the focus of this chapter.
+\label{chap:system_overview}
+
+The autonomous golf cart consists of the physical vehicle, the onboard sensing
+and compute hardware, and the control software that connects them. The original
+gasoline Club Car Pioneer 1200 has been rebuilt as an electric, drive-by-wire
+platform. This chapter summarizes the current system without going into detailed
+modeling or controller design.
 
 \section{Vehicle Platform}
-[Physical platform as received, brief overview of modifications physical modifications]
-The physical component of the platform is comprised of a modified Club Car Pioneer 1200. Originally, the platform
-was an internal combustion engine powered utility class golf cart. Since then, it has been modified in the following
-manners:
-- The engine has been swapped out for a 10kW permanent magnet AC motor
-- A 48V sinusoidal motor controller with supporting electronics has been installed
-- The steering column has been modified with a linkage to a DC motor
-- A linear actuation system has been attached to the vehicle's brake actuation pedal
+The base vehicle is a Club Car Pioneer 1200 utility golf cart. In its original
+form it used an internal combustion engine and conventional driver-operated
+steering and braking. For this project it has been converted to an electric
+platform with electronically controlled traction, steering, and braking.
+
+The major physical and drivetrain modifications are:
+%
+\begin{itemize}
+    \item The internal combustion engine has been removed and replaced with a
+          \SI{10}{\kilo\watt} permanent magnet AC traction motor.
+    \item A \SI{48}{\volt} sinusoidal motor controller and supporting power
+          electronics have been installed to drive the traction motor.
+    \item The steering column has been fitted with a mechanical linkage to a
+          DC motor so that steering angle can be commanded electronically.
+    \item A linear actuator has been attached to the brake pedal to apply and
+          release the friction brake under computer control.
+\end{itemize}
+
+These changes allow drive torque, steering angle, and brake force to be commanded
+by a control system rather than directly by a human driver. The rest of the
+vehicle (chassis, suspension, and basic mechanical layout) remains close to the
+original Pioneer 1200 design.
 
 \section{Sensing and Computation}
-[Describe sensors and computational hardware on the vehicle]
-At the beginning of this stage of the project, the golf cart computational stack was comprised of 
-multiple 8-bit microcontrollers to interface with actuators slaved to a 32-bit microcontroller. These were
-the original low level control system's computer hardware. This has since been replaced with a single 32-bit 
-microcontroller, a TI F28379D launchpad based on the C2000 architecture.
+The platform includes a set of sensors and computation hardware to support
+autonomous operation.
 
-Additionally, the platform had an Apple iMac interfaced with a raspberry pi to comprise the high-level control systemm.
-This has been replaced with a NVIDIA Jetson Orin Nano as the high level controller.
+On the computation side, the current system uses:
+%
+\begin{itemize}
+    \item A TI F28379D LaunchPad based on the C2000 architecture as the low level
+          controller. It interfaces with the traction motor controller, brake
+          actuator, throttle pedal, steering motor, and steering encoder, and
+          handles real-time control tasks.
+    \item An NVIDIA Jetson Orin Nano as the high level controller. It runs the
+          navigation and supervisory software and communicates with the low level
+          controller over a defined interface.
+\end{itemize}
 
-For sensors, the platform has the following:
-- Sick LMS200 LiDAR
-- GPS
+On the sensing side, the platform currently uses:
+%
+\begin{itemize}
+    \item A SICK LMS200 LiDAR for planar range measurements and obstacle
+          detection in front of the vehicle.
+    \item A GPS receiver for global position estimates used in waypoint
+          navigation.
+\end{itemize}
+
+Additional internal signals such as motor controller status and encoder feedback
+are also available to the control system through the low level controller. These
+are used for state estimation, monitoring, and closed loop control.
 
 \section{Control Architecture}
-[Describe the control architecture in terms of components (e.g.\ high-level, low level, simulation, etc)]
-A brief overview of the control systems can be viewed as high-level, low-level, and platform level. 
-The high-level control system focuses on controlling position of the cart, referenced externally to GPS, and performing
-computationally taxing tasks such as obstacle avoidance and path planning.
+From a control point of view, the system is organized into three layers:
+a high level control layer, a low level control layer, and the physical platform.
 
-The low-level control system focuses on ensuring that the speed and steering angle control of the platform is sufficiently 
-linearized such that high level control is simplified. This acts as a translation layer that will allow the high level control 
-system to command a velocity setpoint for the platform, and the appropriate forces will be applied to the wheels and steering 
-columns such that the velocity is met. 
+The \emph{high level} control layer runs on the Jetson Orin Nano. Its main job is
+to control the position of the cart in the environment. It receives GPS and LiDAR
+data, accepts a sequence of waypoints, plans a path, and generates desired speed
+and steering commands. This layer can also host more computationally expensive
+algorithms such as obstacle avoidance and future mapping or localization methods.
 
-The platform level is comprised of the motors, drivetrains, and motor controllers attached to the cart. These represent the 
-kinematics and dynamics of the golf cart, and encompass how when a specific torque is commanded from a motor, how that torque is 
-produced.
+The \emph{low level} control layer runs on the TI F28379D C2000 microcontroller.
+It takes the desired speed and steering commands from the high level controller
+and converts them into actuator signals. In practice, it closes feedback loops on
+vehicle speed and steering angle so that, from the perspective of the high level
+control, the vehicle behaves like a system with simple setpoints rather than raw
+motor voltages or currents.
+
+The \emph{platform} layer is the physical hardware: the traction motor and its
+controller, the steering motor and linkage, the brake actuator, the drivetrain,
+and the vehicle chassis. This layer determines how commanded torques and forces
+translate into motion. The interaction between the low level controller and this
+hardware is the subject of the modeling and controller design discussed in later
+chapters.
+
+Communication between layers is through well-defined signals. The high level
+controller sends speed and steering setpoints to the low level controller and
+receives status and diagnostic information. The low level controller commands the
+platform actuators and monitors their feedback. This layered structure is intended
+to keep the system modular and make it easier to extend and maintain.

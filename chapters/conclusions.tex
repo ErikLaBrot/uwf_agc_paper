@@ -1,2 +1,85 @@
-\chapter{Conclusions}
-[Summarize project, discuss future work]
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+This chapter summarizes the work completed in this project and outlines
+logical next steps for the autonomous golf cart platform. The focus is on
+what was built, what was validated, and what remains.
+
+\section{Summary of Contributions}
+\label{sec:contrib_summary}
+
+This project extends the University of West Florida autonomous golf cart
+platform with a complete low level control stack, a physics-based simulation
+environment, and a defined high level control architecture.
+
+On the modeling side, Chapter~\ref{modeling} derived longitudinal and lateral
+vehicle models suitable for control design. The drivetrain model captures the
+relationship between motor torque, gear ratio, and wheel force, while the
+planar bicycle model provides a basis for steering control and path tracking.
+
+Using these models, Chapter~\ref{chap:low_level_control_design} designed PI
+controllers for traction, braking, and steering. The controller structure is
+simple enough to implement on an embedded microcontroller but still grounded
+in the underlying physics of the vehicle.
+
+Chapter~\ref{chap:simulation} introduced a Gazebo-based simulation of the
+golf cart, including a URDF model, an Ackermann steering plugin, and a ROS~2
+bridge that connects the simulator to the same command interface used by the
+physical cart. This environment allows the controller firmware to be tested
+against a dynamic vehicle model before being deployed to hardware.
+
+On the embedded side, the project implemented the C2000 low level controller
+in Simulink, including the serial command interface, encoder decoding, and
+actuator outputs. The same model is used for both hardware-in-the-loop tests
+and on-cart operation.
+
+Finally, Chapter~\ref{chap:high_level_control} defined the high level control
+architecture on the Jetson. This includes ROS~2 nodes for GPS and compass
+sensors, a serial interface to the C2000, and a planned waypoint-following
+controller. While the full GPS navigation behavior was not completed, the
+interfaces and message flows are in place.
+
+\section{Project Outcomes}
+\label{sec:project_outcomes}
+
+The main technical outcomes are:
+
+\begin{itemize}
+    \item A consistent set of vehicle models that tie together the physical
+          parameters of the cart, the controller design, and the simulation
+          environment,
+    \item A working low level controller on the C2000 that can command drive,
+          brake, and steering actuators using a unified serial interface,
+    \item A Gazebo simulation setup that exercises the same firmware and
+          command protocol as the real hardware,
+    \item A ROS~2-based high level software stack on the Jetson with tested
+          sensor drivers and a defined command path to the low level
+          controller.
+\end{itemize}
+
+Simulation and bench tests in Chapter~\ref{chap:results} show that the low
+level controllers behave as expected. Speed and brake responses track
+setpoints smoothly, and the steering controller follows commanded angles
+within the mechanical limits of the steering system. The serial interface and
+ROS~2 bridge operate as designed in both simulation and hardware tests.
+
+The main limitation is that full end-to-end autonomous driving with GPS
+waypoints was not realized within the project timeline. The system currently
+stops at the point where high level commands can be generated and sent to the
+C2000, but closed-loop navigation using those commands on the real vehicle
+remains future work.
+
+\section{Closing Remarks}
+\label{sec:closing_remarks}
+
+The work presented in this report takes the autonomous golf cart platform
+from a mostly mechanical project to an integrated system with a defined
+control architecture, working low level controllers, and a realistic
+simulation environment. While full autonomous navigation is not yet
+demonstrated, the pieces needed to reach that goal are now in place and
+coherent.
+
+Future students can build on this foundation rather than starting from
+scratch. Completing the GPS waypoint follower, adding state estimation and
+safety layers, and expanding perception will move the platform closer to a
+practical, campus-scale autonomous vehicle.

@@ -1,0 +1,80 @@
+\chapter{Component specifications}
+\label{chap:specs}
+This appendix contains tables of parameters used throughout the project, pulled from manuals and 
+data sheets. 
+
+\begin{table}[h]
+    \centering
+    \caption{Club Car Pioneer 1200 dimensions and weight
+    \cite{clubcar_pioneer1200}}
+    \label{tab:vehicle_specs}
+    \begin{tabular}{ll}
+        \hline
+        Parameter & Value \\
+        \hline
+        Overall length (box bed configuration) & 3.13 m \\
+        Overall width & 1.37 m \\
+        Overall height (at steering wheel) & 1.30 m \\
+        Wheelbase & 2.03 m \\
+        Ground clearance under differential & 0.17 m \\
+        Ground clearance under foot platform & 0.29 m \\
+        Front wheel tread & 1.09 m \\
+        Rear wheel tread & 1.11 m \\
+        Dry weight (all-terrain tires) & 500 kg \\
+        Stock forward speed & 27–31 km/h \\
+        Transaxle reduction (forward) & 15:1 \\
+        Transaxle reduction (reverse) & 20.6:1 \\
+        Tire size (front and rear) & 23$\times$10.50–12 tubeless, 4-ply \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[h]
+    \centering
+    \caption{Motenergy ME1012 traction motor parameters
+    \cite{motenergy_me1012}}
+    \label{tab:me1012_specs}
+    \begin{tabular}{ll}
+        \hline
+        Parameter & Value \\
+        \hline
+        Motor type & 3-phase PMSM, Y-connected, axial air gap \\
+        Continuous mechanical power (72 V) & 10 kW \\
+        Peak mechanical power (72 V, 1 min) & 24 kW \\
+        Continuous phase current & 125 A (AC) \\
+        Peak phase current (1 min) & 420 A (AC) \\
+        Recommended DC bus voltage range & 24–72 V \\
+        Maximum recommended rotor speed & 5000 rpm \\
+        Torque constant & 0.12 N\,m/A \\
+        Phase-to-phase resistance & 0.065 $\Omega$ \\
+        Phase-to-phase inductance & 0.05 mH \\
+        Rotor inertia & 45 kg\,cm$^2$ \\
+        Nominal efficiency (24–72 V) & 92\% \\
+        Mass & 16 kg \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[h]
+    \centering
+    \caption{Kelly KLS7275D motor controller parameters
+    \cite{kelly_kls7275d}}
+    \label{tab:kls7275d_specs}
+    \begin{tabular}{ll}
+        \hline
+        Parameter & Value \\
+        \hline
+        Controller type & Sinusoidal BLDC/PMSM motor controller \\
+        Nominal battery voltage & 72 V \\
+        Battery voltage range (B$+$) & 24–72 V \\
+        Logic supply voltage (PWR) & 18–90 V \\
+        Max continuous battery current & 200 A \\
+        Max 10 s battery current & 500 A \\
+        PWM switching frequency & 20 kHz \\
+        Standby current & $< 0.5$ mA \\
+        Standard throttle input & 0–5 V resistive pot or 1–4 V Hall \\
+        Sensor supply output & 5 V or 12 V, 40 mA \\
+        Operating temperature (MOSFET) & $-40$ to 70 $^\circ$C \\
+        \hline
+    \end{tabular}
+\end{table}

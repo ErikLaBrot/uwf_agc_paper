@@ -1,11 +1,114 @@
 \chapter{High Level Control Design}
-[Discuss implementation of GPS waypoint following]
+\label{chap:high_level_control}
 
-\section{Jetson Nano}
-[Describe jetson nano, inputs and outputs]
+This chapter describes the high level control layer that runs on the Jetson edge computer.
+The goal of this layer is to turn global navigation objectives into local speed and steering
+setpoints for the low level controller described in Chapter~\ref{chap:low_level_control_design}.
+It receives GPS and heading measurements, manages a list of waypoints, and generates
+commands for the C2000 microcontroller over a serial link.
 
-\section{ROS2}
-[Explain ROS2's purpose and role in project]
+The design presented here reflects the intended architecture for GPS waypoint following.
+The supporting ROS~2 nodes for GPS, compass, and C2000 communication are implemented
+and tested, but the full waypoint following controller has not yet been deployed on
+the physical cart.
 
-\section{GPS Waypoint Line Following}
-[Derive waypoint line following controller]
+\section{Jetson Orin Nano}
+\label{sec:jetson_orin}
+
+The high level controller runs on an NVIDIA Jetson Orin Nano mounted on the vehicle.
+This module provides a multi-core CPU and GPU, along with UART, I\textsuperscript{2}C,
+and USB interfaces for sensor and actuator connections. It serves as the main
+compute platform for navigation, perception, and supervisory control.
+
+On the hardware side, the Jetson connects to:
+\begin{itemize}
+    \item The Ublox GPS receiver over a UART port exposed as \texttt{/dev/ttyTHS1},
+    \item The HMC5883L magnetometer over the I\textsuperscript{2}C bus,
+    \item The SICK LMS200 LiDAR through an external interface (used primarily for future obstacle detection),
+    \item The C2000 microcontroller over a USB--serial adapter,
+    \item An Ethernet or Wi-Fi link for development and monitoring.
+\end{itemize}
+
+The Jetson runs a Linux operating system and hosts a ROS~2 stack inside a containerized
+environment. This mirrors the ROS~2 installation used on the development workstation
+so that the same launches and nodes can be exercised both in simulation and on hardware.
+ROS~2 provides the node, topic, and parameter abstractions used to organize the high level
+control software \cite{ros2}.
+
+From a control perspective, the Jetson exposes a single upstream interface to the rest
+of the system: it publishes desired longitudinal speed $v^*(t)$ and steering angle
+$\delta^*(t)$ as ROS~2 messages. Everything else inside the high level layer
+(sensor drivers, waypoint management, and control logic) is hidden behind this interface.
+
+\section{ROS~2 Node Architecture}
+\label{sec:ros2_high_level}
+
+High level control on the Jetson is organized as a small set of ROS~2 nodes.
+Each node has a narrow, well-defined responsibility and communicates using standard
+ROS message types.
+
+At the sensor interface, the \texttt{agc\_sensors} package provides a node
+\texttt{gps\_compass\_node}. This node:
+\begin{itemize}
+    \item Opens the GPS serial port with a configurable baud rate,
+    \item Parses UBX navigation messages into latitude, longitude, and altitude,
+    \item Publishes GPS fixes as \texttt{sensor\_msgs/NavSatFix} on the \texttt{gps/fix} topic,
+    \item Reads heading from the HMC5883L magnetometer over I\textsuperscript{2}C,
+    \item Publishes heading in degrees as \texttt{std\_msgs/Float64} on \texttt{compass/headingDeg}.
+\end{itemize}
+
+This node encapsulates all device-specific handling for the GPS and compass.
+Downstream controllers can treat its outputs as generic position and heading
+measurements without needing to be aware of message formats or low level protocols.
+
+At the actuator interface, the \texttt{agc\_c2000\_interface} package provides
+the \texttt{c2000\_tx} node. This node:
+\begin{itemize}
+    \item Subscribes to an \texttt{agc\_msgs/C2000Command} message on the
+          \texttt{c2000/cmd} topic,
+    \item Packs the command into a compact byte frame consisting of:
+          a throttle magnitude byte, direction and brake flags, and a floating point
+          steering angle,
+    \item Sends the packed frame over a serial port to the C2000 microcontroller,
+    \item Supports either event-driven transmission (write-on-change) or periodic
+          transmission at a fixed rate.
+\end{itemize}
+
+The C2000 receives this frame, unpacks it in Simulink, and uses the contents as
+setpoints for the low level PI controllers. This keeps the ROS~2 side focused on
+high level quantities (speed and steering) while the microcontroller manages
+all hardware details.
+
+Between these two ends sits the waypoint follower node, which is responsible for:
+\begin{itemize}
+    \item Maintaining the list of GPS waypoints that define the route,
+    \item Converting the current GPS fix into a local planar coordinate frame,
+    \item Identifying the current target segment of the route,
+    \item Computing a desired speed $v^*(t)$ and steering angle $\delta^*(t)$
+          based on the cross-track and heading error to that segment,
+    \item Publishing the corresponding \texttt{C2000Command} messages on
+          \texttt{c2000/cmd}.
+\end{itemize}
+
+In the current project state, the GPS/compass and C2000 interface nodes are
+implemented and have been exercised on the Jetson. The waypoint follower node
+is specified and partially prototyped, but was not completed to a state where
+full autonomous waypoint following could be demonstrated on the physical cart.
+
+\section{Implementation Status and Limitations}
+\label{sec:hlc_status}
+
+While the ROS~2 infrastructure for high level control is largely in place,
+the full GPS waypoint following behavior was not completed within the project
+timeline. Specifically:
+\begin{itemize}
+    \item The \texttt{gps\_compass\_node} has been tested on the Jetson and
+          verified to publish reasonable GPS fixes and compass headings.
+    \item The \texttt{c2000\_tx} node has been verified to send correctly
+          formatted command frames to the C2000 over serial.
+\end{itemize}
+
+As a result, the high level control design in this chapter should be viewed
+as an implemented sensor and actuator interface rather than a complete autonomous driving stack.
+Finishing the waypoint follower and integrating it with the existing low level
+controllers is the next step for the autonomous golf cart project.

@@ -1,26 +1,78 @@
 \chapter{Introduction}
-This project contributes to the progress of the University of West Florida 
-autonomous golf cart project. The golf cart project focuses on enabling a small-scale
-platform with intelligent capabilities such as navigation and obstacle avoidance. Ultimately,
-this will provide the platform as a component to a ride-share style service with the 
-stated goal of calling the cart from across the University campus.
+\label{chap:introduction}
 
-\section{Motivation and Project Goals}
-The motivation of this particular stage of the project is to design a new control system layered
-atop the existing platform to bring it to a higher level of autonomy. This new control system will 
-leverage the capabilities of newer, more powerful computational hardware and software to improve 
-upon the original system. The ultimate goal of this stage of the project is to have a platform that is capable
-of autonomous navigation between GPS waypoints, flowing desired motion down to a new low-level controller capable 
-of commanding velocity and steering.
+The University of West Florida autonomous golf cart project is intended to be
+a platform for autonomous navigation. The vehicle is a
+utility class electric golf cart controlled with drive-by-wire actuators and an
+embedded compute unit. This work focuses on the control and software layers
+that connect those actuators to high level autonomous navigation algorithms.
 
-\section{Project Scope and Constraints}
-[Discuss what is and is not included in the project]
-The scope of this project stage is to modify the hardware of the golf cart, such as microcontrollers and sensors,
-to produce an autonomous platform. Additionally, simulation work will be performed as supplementary verification of 
-design. 
+A TI F28379D C2000 microcontroller executes low level control for traction, braking, and steering.
+A NVIDIA Jetson Orin Nano runs ROS~2 and hosts higher
+level control algorithms. A Gazebo-based simulation mirrors the physical system and
+utilizes the same command and feedback interfaces, so control software can be
+developed and exercised in simulation before deployment to the vehicle.
+
+\section{Motivation and Objectives}
+\label{sec:intro_motivation}
+
+Autonomous navigation experiments require a control system that behaves in a
+predictable way and can be reused across different algorithms. Separating low
+level actuation from high level decision making helps with both. The
+microcontroller is responsible for tracking speed and steering commands. The
+Jetson is responsible for deciding which commands to send.
+
+The objectives of this project are to
+\begin{itemize}
+    \item derive longitudinal and planar vehicle models suitable for control
+          design and simulation,
+    \item design and implement low level controllers for drive, brake, and
+          steering on the C2000,
+    \item develop a Gazebo-based simulation that uses the same command
+          interface as the physical cart,
+    \item implement ROS~2 nodes for key sensors and for the C2000 link,
+    \item define and begin implementing a high level controller for GPS-based
+          autonomous navigation.
+\end{itemize}
+
+These pieces form the control and software infrastructure needed for later
+work on path planning, perception, and higher level autonomy.
+
+\section{Scope}
+\label{sec:intro_scope}
+
+The scope of this report is limited to the control and software that bridge
+the existing mechanical platform and autonomous navigation. The work includes
+\begin{itemize}
+    \item vehicle modeling for longitudinal dynamics and planar motion,
+    \item low level PI control design and embedded implementation on the
+          C2000,
+    \item construction of a Gazebo simulation with a URDF model, Ackermann
+          steering plugin, and ROS~2 bridge,
+    \item ROS~2 integration on the Jetson for GPS, compass, and the C2000
+          serial interface,
+    \item architecture and partial implementation of a GPS waypoint follower.
+\end{itemize}
+
+This project does not address ride-share scheduling, multi-vehicle
+coordination, or operation at higher speeds. Perception and obstacle
+avoidance are only treated at the architectural level. GPS-based waypoint
+navigation on the physical cart was a target, but only part of the high level
+functionality was completed.
+
 \section{Contributions}
-The contributions of this stage of the project are as follows;
-- Platform Rewire
-- Low Level Speed Controller 
-- High Level Position Controller
+\label{sec:intro_contributions}
 
+Within this scope, the contributions of this work to the autonomous golf cart
+platform are
+\begin{itemize}
+    \item a set of longitudinal and planar models tied to measured vehicle
+          parameters and used directly for controller design and simulation,
+    \item a low level controller implementation on the C2000 for traction,
+          braking, and steering, with a unified serial command interface,
+    \item a Gazebo simulation of the cart that shares packet formats and ROS~2
+          topics with the physical system,
+    \item a ROS~2-based high level control structure on the Jetson that
+          supports GPS-based autonomous navigation and future perception
+          modules.
+\end{itemize}

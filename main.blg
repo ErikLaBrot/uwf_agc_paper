@@ -14,45 +14,45 @@ Warning--I didn't find a database entry for "ioannou_xu"
 -- See the "IEEEtran_bst_HOWTO.pdf" manual for usage information.
 
 Done.
-You've used 3 entries,
+You've used 13 entries,
             4087 wiz_defined-function locations,
-            843 strings with 7758 characters,
-and the built_in function-call counts, 1975 in all, are:
-= -- 136
-> -- 37
-< -- 13
-+ -- 20
-- -- 6
-* -- 102
-:= -- 300
-add.period$ -- 7
-call.type$ -- 3
-change.case$ -- 2
-chr.to.int$ -- 36
-cite$ -- 3
-duplicate$ -- 141
-empty$ -- 193
-format.name$ -- 7
-if$ -- 451
+            898 strings with 9237 characters,
+and the built_in function-call counts, 6870 in all, are:
+= -- 576
+> -- 109
+< -- 29
++ -- 56
+- -- 21
+* -- 296
+:= -- 1163
+add.period$ -- 25
+call.type$ -- 13
+change.case$ -- 17
+chr.to.int$ -- 66
+cite$ -- 13
+duplicate$ -- 542
+empty$ -- 608
+format.name$ -- 24
+if$ -- 1567
 int.to.chr$ -- 0
-int.to.str$ -- 3
-missing$ -- 24
-newline$ -- 32
-num.names$ -- 3
-pop$ -- 65
+int.to.str$ -- 13
+missing$ -- 104
+newline$ -- 66
+num.names$ -- 13
+pop$ -- 242
 preamble$ -- 1
 purify$ -- 0
 quote$ -- 2
-skip$ -- 145
+skip$ -- 549
 stack$ -- 0
-substring$ -- 77
-swap$ -- 98
-text.length$ -- 1
+substring$ -- 177
+swap$ -- 370
+text.length$ -- 7
 text.prefix$ -- 0
 top$ -- 5
-type$ -- 3
+type$ -- 13
 warning$ -- 0
-while$ -- 8
-width$ -- 4
-write$ -- 47
+while$ -- 24
+width$ -- 15
+write$ -- 144
 (There was 1 warning)

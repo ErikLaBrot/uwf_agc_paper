@@ -1,13 +1,14 @@
 %Shift around citations. Maybe cite Nise and Franklin? Double check where I'm citing Iannou. Most of this is fairly bogstandard controls math though.
 %Draw up some system block diagrams to pad stuff out. That'd be dope I think
 \chapter{Low-Level Control Design}
-\label{chap:low_level_control}
+\label{chap:low_level_control_design}
 
 This chapter presents the low-level controllers used to regulate the golf cart's
 longitudinal speed and steering angle. The combined planar model in
 Chapter~\ref{modeling} provides the relationship between motor torque, brake
 torque, steering angle, and platform motion. That model is used here as the basis
-for control design.
+for control design. Controls are designed referencing Nise\cite{nise_control} to source general forms
+for systems and terms.
 
 This control layer maps a speed setpoint $v^*(t)$ and a steering setpoitn
 $\delta^*(t)$ to actuator commands for the traction motor, friction brake, and
@@ -77,7 +78,7 @@ where $T_\text{motor}$ and $T_\text{brake}$ are the effective wheel torques.
 The rolling resistance term is treated as a constant disturbance for a given
 operating condition.
 
-The dynamic model can be simplified based on the domain the error signal exists in.
+Taking inspiration from Ioannou et al,\cite{ioannou_aicc}, the dynamic model can be simplified based on the domain the error signal exists in.
 Let $u_\text{th} \in [0,1]$ and $u_\text{br} \in [0,1]$
 be normalized throttle and brake commands. In the drive domain (brake
 released) and the brake domain (throttle released), the dynamics are modeled as
@@ -133,7 +134,35 @@ with transfer function
     \label{eq:drive_pi_tf}
 \end{equation}
 
-With unity feedback, the closed-loop transfer function from $v^*$ to $v$ is
+From Nise, with unity feedback, the closed-loop transfer function from $v^*$ to $v$ is
+
+\begin{figure}[h]
+    \centering
+    \begin{tikzpicture}[auto]
+        % Nodes
+        \node[sum] (sum) {};
+        \node[left=1.5cm of sum] (r) {$V^*(s)$};
+        \node[block, right=1.2cm of sum] (cblock) {$C(s)$};
+        \node[block, right=1.2cm of cblock] (gblock) {$G(s)$};
+        \node[right=1.2cm of gblock] (v) {$V(s)$};
+
+        % Sum node labels
+        \node at ($(sum) + (-0.15,0.15)$) {\small $+$};
+        \node at ($(sum) + (-0.15,-0.15)$) {\small $-$};
+
+        % Forward path
+        \draw[->] (r) -- (sum);
+        \draw[->] (sum) -- node[above] {$E(s)$} (cblock);
+        \draw[->] (cblock) -- (gblock);
+        \draw[->] (gblock) -- node[above] {$V(s)$} (v);
+
+        % Feedback path (unit feedback, no block)
+        \draw[->] ([xshift=0.25cm]gblock.east) |- ([yshift=-1.2cm]gblock.east) -| (sum.south);
+    \end{tikzpicture}
+    \caption{Unity feedback speed control loop with controller $C(s)$ and plant $G(s)$.}
+    \label{fig:unity_feedback_speed}
+\end{figure}
+
 \begin{equation}
     \frac{V(s)}{V^*(s)} =
     \frac{C_v(s) G_d(s)}{1 + C_v(s) G_d(s)} =

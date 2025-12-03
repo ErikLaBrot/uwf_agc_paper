@@ -1,17 +1,256 @@
 \chapter{Simulation}
-[Discuss CARLA sim briefly, Gazebo sim, sim model design]
+\label{chap:simulation}
 
-\section{CARLA Sim}
-[Discuss CARLA's poor fit for project]
+This chapter describes the Gazebo-based simulation and ROS~2 integration used to exercise the low level controllers and the C2000 implementation before testing on the physical vehicle.
+The goal is to replace the golf cart with a simulated analogue that exposes the same command and feedback interfaces as the real platform.
+Chapter~\ref{chap:system_overview} gives a high level view of the system, while this chapter focuses on the simulation architecture and its role in the control stack.
 
-\section{Gazebo Sim}
-[Introduce Gazebo Sim]
+% Figure: High level simulation architecture
+% (C2000 Simulink model ↔ serial link ↔ c2000_sim_bridge node ↔ ros2_control ↔ Gazebo model)
 
-\subsection{Simulation Model}
-[Discuss URDF]
+\section{Gazebo Simulator}
 
-\subsection{Simulation Sensors}
-[Discuss simulated GPS, LiDAR, Encoders]
+Gazebo~Sim is an open-source robotics simulator that provides rigid body dynamics, contact modeling, and sensor plugins suitable for robot development \cite{gazebo_docs}.
+In this project it serves as the plant model for the golf cart.
 
-\subsection{Simulation Interfaces}
-[Discuss ROS-GZ Bridge]
+The \texttt{uwf\_empty.world} file defines a deliberately minimal environment:
+\begin{itemize}
+  \item A flat ground plane of size $100 \times 100$\,m,
+  \item A physics configuration with a \SI{1}{ms} maximum step size and a real-time factor near 1.0,
+  \item The standard Gazebo physics system plugin and default gravity.
+\end{itemize}
+
+The world is kept feature-light so that changes in vehicle behavior can be traced to the controller or model configuration.
+Obstacles, terrain variation, and additional scenery can be added later when moving from controller bring-up to higher level navigation experiments.
+
+% Figure: Gazebo snapshot of the uwf_empty world with the golf cart model
+
+\section{ROS~2 Middleware and HIL Role}
+
+ROS~2 is an open-source middleware framework for robotics that provides message passing, parameter management, and lifecycle tools over a DDS transport \cite{ros2}.
+It is widely used as the integration layer in modern robotic platforms, and it plays the same role here.
+
+In this project ROS~2 sits between:
+\begin{itemize}
+  \item Gazebo, which simulates the vehicle dynamics and sensors,
+  \item The C2000 controller, running Simulink-generated low level firmware,
+  \item Auxiliary nodes such as controller managers and bridge nodes.
+\end{itemize}
+
+Within ROS~2, several subsystems are central to the simulation:
+\begin{itemize}
+  \item \texttt{ros2\_control}, which provides a standardized interface for joint-level controllers and hardware abstraction \cite{ros2_control_docs},
+  \item \texttt{ros\_gz\_sim} and \texttt{ros\_gz\_bridge}, which connect Gazebo entities (joints, links, and sensors) to ROS~2 topics and services \cite{ros_gz_bridge_docs}.
+\end{itemize}
+
+Together these components allow the C2000 firmware to interact with the simulated vehicle using the same command and feedback channels that it will use on the physical cart.
+This makes the simulation a hardware-in-the-loop (HIL) testbed once the real microcontroller is connected.
+
+% Figure: HIL architecture diagram (C2000 ↔ serial ↔ ROS2 bridge ↔ Gazebo)
+
+\section{Vehicle Model}
+
+The golf cart is modeled as a URDF/Xacro description in the \texttt{agc\_golfcart\_sim} package.
+The URDF specifies the kinematic tree, masses, inertias, joint limits, and collision geometries used by Gazebo.
+The parameters are chosen to be physically meaningful and consistent with the modeling and hardware chapters, rather than arbitrary values.
+
+\subsection{Link and Joint Structure}
+
+The root link is \texttt{base\_footprint}, kept for compatibility with ROS navigation and visualization tools.
+A fixed transform links \texttt{base\_footprint} to the \texttt{chassis} link, which carries the lumped mass and inertia of the vehicle body:
+\begin{itemize}
+  \item Mass on the order of \SI{500}{kg}, matching the Pioneer 1200 curb mass with the new powertrain installed,
+  \item Diagonal inertia entries chosen to approximate the mass distribution about the center of gravity based on manual data and measurements.
+\end{itemize}
+
+The remaining links and joints are organized as a tree:
+\begin{itemize}
+  \item Four wheel links (\texttt{front\_left\_wheel}, \texttt{front\_right\_wheel}, \texttt{rear\_left\_wheel}, \texttt{rear\_right\_wheel}),
+  \item Revolute wheel joints about the $y$-axis to allow rolling motion,
+  \item A virtual \texttt{steering\_input\_joint} representing the steering column input,
+  \item Physical steering knuckles (\texttt{front\_left\_steering\_joint}, \texttt{front\_right\_steering\_joint}) which rotate the front wheels.
+\end{itemize}
+
+All joints include limits, damping, and friction for numerical stability and to approximate real hardware behavior.
+
+% Figure: Kinematic tree of the golf cart model (base_footprint, chassis, wheels, steering joints)
+
+\subsection{Sensors}
+
+Three simulated sensors are mounted on the chassis:
+\begin{itemize}
+  \item A planar LiDAR on \texttt{lidar\_link} publishing a \texttt{sensor\_msgs/LaserScan} on \texttt{/lidar},
+  \item A GPS sensor on \texttt{gps\_link} publishing a \texttt{sensor\_msgs/NavSatFix} on \texttt{/gps},
+  \item An IMU on \texttt{imu\_link} publishing a \texttt{sensor\_msgs/Imu} on \texttt{/imu}.
+\end{itemize}
+
+The LiDAR provides 2D range data for localization and obstacle detection in later work.
+The GPS and IMU provide global position and inertial data consistent with the physical sensor suite on the cart.
+Noise models are left modest so that controller behavior remains readable during tuning, but the interfaces match those of real sensors.
+
+\subsection{Hardware-Consistent Parameters}
+
+The URDF parameters are chosen to mimic the physical hardware:
+\begin{itemize}
+  \item \textbf{Vehicle dimensions:} Wheelbase, front and rear track widths, and overall length are set from the Pioneer 1200 manual and verified by direct measurements on the modified cart.
+  \item \textbf{Wheel and tire geometry:} Wheel radius and tire width are taken from the installed tire size so that the mapping between wheel angular velocity and vehicle speed is consistent.
+  \item \textbf{Mass and inertia:} Curb mass is based on manufacturer data with adjustments for removed ICE components and added electric components. Inertias are tuned within a narrow range to keep simulations stable while remaining physically plausible.
+  \item \textbf{Steering geometry:} Wheelbase and front track width match the values used in the kinematic bicycle model in Chapter~\ref{modeling}, so the relationship between steering input and turn radius is consistent.
+  \item \textbf{Drivetrain limits:} Maximum drive torque, brake torque, and steering effort are based on motor and actuator datasheets, with slight reductions to keep the simulation numerically stable and conservative.
+\end{itemize}
+
+These choices ensure that step responses in simulation occupy the same order of magnitude as the hardware and stay within the operating range assumed in the modeling and control design chapters.
+
+% Figure: Table comparing key real-vehicle specs (mass, wheelbase, wheel radius) to URDF values
+
+\subsection{Ackermann Steering Plugin}
+\label{subsec:ackermann_plugin}
+
+The front steering geometry is handled by a custom Gazebo system plugin implemented in
+\texttt{plugins/gazebo/ackermann\_steering/ackermann\_steering\_plugin.cpp} and loaded as
+\texttt{libackermann\_steering\_plugin.so}.
+The plugin implements standard Ackermann steering relations between a bicycle-model steering angle and the individual front wheel angles \cite{vogel_ackermann}.
+
+The controller commands a single virtual steering angle $\delta$ on
+\texttt{steering\_input\_joint}, corresponding to the front axle angle in the kinematic bicycle model.
+Given wheelbase $L$ and front track width $w$, the corresponding turn radius $R$ of the vehicle path is
+\begin{equation}
+  R = \frac{L}{\tan \delta}.
+\end{equation}
+For this turn radius, the inner and outer wheel steer angles
+$\delta_{\mathrm{in}}$ and $\delta_{\mathrm{out}}$ that approximately satisfy Ackermann steering geometry are
+\begin{align}
+  \delta_{\mathrm{in}}  &= \arctan\!\left( \frac{L}{R - \tfrac{w}{2}} \right), \\
+  \delta_{\mathrm{out}} &= \arctan\!\left( \frac{L}{R + \tfrac{w}{2}} \right).
+\end{align}
+
+The plugin computes these wheel angles from the commanded $\delta$ and writes them to the
+\texttt{front\_left\_steering\_joint} and \texttt{front\_right\_steering\_joint}.
+This keeps the simulated kinematics consistent with the bicycle model used in controller design while still producing realistic front wheel motion in Gazebo.
+
+\section{ros2\_control Integration}
+
+The interface between ROS~2 and Gazebo is built around \texttt{ros2\_control}.
+The golf cart model includes a \texttt{ros2\_control} plugin attached to the chassis link, with joint interfaces defined for steering and rear drive.
+
+\subsection{ROS Interface and Parameters}
+
+Controller configuration in \texttt{config/ros2\_controllers.yaml} declares:
+\begin{itemize}
+  \item A steering controller that commands the \texttt{steering\_input\_joint} in position (radians),
+  \item A rear drive controller that commands the driven wheel joints in effort (Newton-meters),
+  \item Joint state interfaces so that all joint positions, velocities, and efforts are published on \texttt{/joint\_states}.
+\end{itemize}
+
+The steering controller accepts target steering angles from the high level controller.
+The rear drive controller accepts commanded drive efforts that represent the combined effect of throttle and brake after the low level PI controllers.
+These controllers are standard \texttt{ros2\_control} controllers and are managed by the \texttt{controller\_manager} node \cite{ros2_control_docs}.
+
+% Figure: ros2_control diagram showing controller_manager, steering_controller,
+% rear_drive_controller, and joint interfaces
+
+\section{Launch Architecture}
+
+The main simulation launch file \texttt{launch/simulation.launch.py} orchestrates:
+\begin{enumerate}
+  \item Starting Gazebo with \texttt{uwf\_empty.world},
+  \item Generating the URDF at runtime by running \texttt{xacro} on \texttt{model.xacro.urdf},
+  \item Starting \texttt{robot\_state\_publisher} with the generated \texttt{robot\_description},
+  \item Spawning the golf cart model into Gazebo using the published description,
+  \item Starting the ROS--Gazebo bridge to connect Gazebo topics (joints, sensors) to ROS~2 topics \cite{ros_gz_bridge_docs},
+  \item Spawning the \texttt{ros2\_control} controllers,
+  \item Launching the C2000 simulation bridge node.
+\end{enumerate}
+
+Environment variables are set so Gazebo can locate the model and custom plugins:
+\begin{itemize}
+  \item \texttt{IGN\_GAZEBO\_RESOURCE\_PATH} includes the package \texttt{models} directory,
+  \item \texttt{AGC\_CONFIG\_PATH} points to the \texttt{config} directory so that YAML files can be found by both launch files and nodes.
+\end{itemize}
+
+This launch structure mirrors how the real system will be brought up: Gazebo takes the role of the physical vehicle and environment, while the remaining nodes are the same ones used in bench and field tests.
+
+\section{C2000 Simulation Bridge}
+
+The C2000 simulation bridge is a ROS~2 node that emulates the wheel encoder and steering sensor signals seen by the C2000 and receives motor and steering commands from it.
+It allows the same Simulink-generated firmware to run untouched, whether the plant is Gazebo or the real golf cart.
+
+The node is implemented in Python in the \texttt{agc\_c2000\_interface} package.
+It is configured via \texttt{config/c2000\_bridge\_params.yaml}, which sets:
+\begin{itemize}
+  \item Serial device name, baud rate, and update rate,
+  \item Joint names for steering and rear drive,
+  \item Encoder counts per revolution and steering encoder center value,
+  \item Steering gear ratio mapping joint radians to steering column radians,
+  \item Scaling factors between C2000 command bytes and ROS~2 effort commands.
+\end{itemize}
+
+\subsection{Encoder Emulation}
+
+The bridge converts simulated joint states into QEP-style encoder counts expected by the C2000 firmware:
+\begin{itemize}
+  \item It subscribes to \texttt{/joint\_states},
+  \item It extracts the steering joint angle and rear wheel joint angle,
+  \item It maintains integer encoder counts for steering and drive based on configured counts-per-revolution and gear ratio.
+\end{itemize}
+
+For steering, the node tracks the last steering angle, converts angle differences into counts using the configured counts-per-revolution and steering gear ratio, and updates the steering encoder value.
+For the drive wheels, it integrates the rear wheel rotation into counts so that the C2000 can compute wheel speed from successive differences, just as it does with a real QEP.
+This makes the C2000 firmware unaware that Gazebo is providing the “sensor” data.
+
+\subsection{Serial Protocol and Effort Mapping}
+
+The bridge implements the same serial packet structure used between the C2000 and the physical interface board.
+Two packet types are used:
+\begin{itemize}
+  \item Sensor packets from bridge to C2000, carrying steering and drive encoder counts and status bits,
+  \item Motor command packets from C2000 to bridge, carrying throttle, brake, and steering command bytes.
+\end{itemize}
+
+On receiving a command packet, the bridge:
+\begin{enumerate}
+  \item Decodes the throttle and brake command bytes and maps them to a net rear axle effort,
+  \item Decodes the steering command byte and maps it to a desired steering angle at the steering column,
+  \item Converts the steering column angle to a \texttt{steering\_input\_joint} target using the steering gear ratio,
+  \item Publishes the resulting commands to the steering and rear drive controllers as effort or position targets,
+  \item Packages the latest encoder counts into a sensor packet and transmits it back to the C2000 at a fixed rate.
+\end{enumerate}
+
+Because the C2000 sees the same packet structure, scaling, and timing in simulation and on hardware, the same firmware image can be used in both cases.
+
+\section{Hardware-in-the-Loop Setup}
+
+When the real C2000 board is connected over USB serial to the simulation host, the system forms a HIL loop:
+\begin{itemize}
+  \item The C2000 runs the low level PI controllers described in Chapter~\ref{chap:low_level_control_design} and implemented in Chapter~\ref{chap:llc_implementation},
+  \item The C2000 simulation bridge provides encoder counts and receives command packets,
+  \item \texttt{ros2\_control} translates the commands into joint efforts and positions,
+  \item Gazebo advances the vehicle dynamics and publishes joint states and sensor data,
+  \item The bridge converts joint states back into encoder counts and the cycle repeats.
+\end{itemize}
+
+This setup allows PI gains, limiters, and safety logic to be tuned against a dynamic plant without running the real traction motor or moving the vehicle.
+Only the serial connection and supply power for the C2000 are required.
+
+% Figure: Block diagram of the full HIL loop, showing timing and data flow
+
+\section{Summary and Limitations}
+
+This simulation stack:
+\begin{itemize}
+  \item Provides a dynamic model consistent with the modeling assumptions in Chapter~\ref{modeling},
+  \item Mimics the physical hardware using datasheet-based parameters and measured dimensions,
+  \item Reproduces the C2000 encoder and serial interfaces closely enough to reuse the same Simulink firmware in simulation and on hardware,
+  \item Uses ROS~2 as the integration layer between the Gazebo plant and the C2000 controller, enabling full HIL testing.
+\end{itemize}
+
+Several limitations remain:
+\begin{itemize}
+  \item The terrain is flat and rigid, with no suspension compliance or body roll effects,
+  \item Tire forces are modeled using simple friction and damping, not a full tire model with slip and combined loading,
+  \item Sensor models include only modest noise and latency and do not yet capture all real-world artifacts,
+  \item Power electronics, thermal limits, and battery dynamics are not modeled in detail.
+\end{itemize}
+
+These limitations are acceptable for validating the low level controllers and integration.
+They should be revisited when moving to more aggressive maneuvers, rough terrain, or when closing higher level perception and planning loops on the real golf cart.

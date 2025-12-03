@@ -1,2 +1,237 @@
 \chapter{Results}
-[Discus results of all stages of project, design, simulation, testing]
+\label{chap:results}
+
+This chapter summarizes the validation of the models, controllers, and
+software architecture developed in the previous chapters. Results are
+organized into two main parts:
+
+\begin{itemize}
+    \item Simulation-based validation of the low-level controllers inside the
+          Gazebo environment described in Chapter~\ref{chap:simulation},
+    \item Hardware-in-the-loop and bench tests of the C2000 controller and
+          drive-by-wire hardware.
+\end{itemize}
+
+The intent is to provide a concise summary of controller behavior and system
+integration. Step response plots, time histories, and block diagrams are
+intended to be placed throughout this chapter to illustrate the results.
+
+% Figure ideas:
+% - Simulated speed step response (drive controller)
+% - Simulated brake response (commanded deceleration / speed-to-zero)
+% - Simulated steering angle step response
+% - HIL test setup photo of cart and instrumentation
+% - Measured speed step response on hardware
+% - Measured steering step response on hardware
+
+\section{Simulation-Based Controller Validation}
+\label{sec:sim_validation}
+
+Simulation results were generated using the Gazebo-based HIL environment from
+Chapter~\ref{chap:simulation}. In that setup, the same Simulink model that
+runs on the C2000 microcontroller is driven through the serial bridge and
+controls the Gazebo vehicle model via ROS~2. This makes the simulated
+responses representative of the actual firmware and command interface.
+
+All controller tests in this section use the planar model from
+Chapter~\ref{modeling} and the low-level controller structure from
+Chapter~\ref{chap:low_level_control_design}. The focus is on step responses
+and qualitative behavior.
+
+\subsection{Longitudinal Speed Controller}
+\label{sec:sim_speed_results}
+
+The drive speed controller was evaluated in simulation by commanding a step in
+desired speed from standstill to a moderate cruising speed. The test procedure
+is:
+
+\begin{enumerate}
+    \item Initialize the vehicle at rest on level ground,
+    \item Apply a step in speed command $v^*$ from $0$ to the target value,
+    \item Record vehicle speed, throttle command, and brake command over time.
+\end{enumerate}
+
+The throttle command saturates briefly during the initial acceleration, then
+backs off as speed approaches the target. The brake command remains at zero
+throughout the maneuver, confirming that the domain logic for mutually
+exclusive throttle and brake is functioning as intended.
+
+% Figure: Simulated speed step response (velocity vs time, throttle command)
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/Results/Figure_1.png}
+    \caption{Results for Step Response to Drive Controller}
+    \label{fig:drive_response}
+\end{figure}
+\clearpage
+
+\subsection{Brake Controller}
+\label{sec:sim_brake_results}
+
+The brake controller was evaluated by commanding a speed step from a steady
+cruise back to zero. The test procedure mirrors the drive test, but with the
+cart starting at a fixed speed and a step commanded down to $v^* = 0$:
+
+\begin{enumerate}
+    \item Accelerate the vehicle to a steady cruising speed using the drive
+          controller,
+    \item At $t = 0$, command a step to zero speed,
+    \item Record speed, brake command, and throttle command.
+\end{enumerate}
+
+In simulation, the brake controller brings the speed to zero in a controlled
+manner. The brake command ramps up to a level that produces a roughly constant
+deceleration until the speed approaches zero, then tapers off. Throttle
+remains at zero throughout the maneuver, indicating that the controller
+correctly switches from drive to brake domain.
+
+The resulting stopping distance and deceleration rate depend on the chosen
+gains and the assumed brake torque capability, but are consistent with the
+longitudinal model from Chapter~\ref{modeling}. The simulated response is
+free of chatter at low speeds.
+% Figure: Simulated braking response (speed vs time, brake command)
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/Results/Figure_2.png}
+    \caption{Results for Step Response to brake Controller}
+    \label{fig:drive_response}
+\end{figure}
+\clearpage
+\subsection{Steering Angle Controller}
+\label{sec:sim_steer_results}
+
+The steering controller was tested in simulation using a step in desired
+steering angle. This approximates the behavior needed for both lane changes
+and curvature following. The test procedure is:
+
+\begin{enumerate}
+    \item Initialize the vehicle with steering angle $\delta = 0$,
+    \item At $t = 0$, command a step in steering angle $\delta^*$ within the
+          physical limits of the mechanism,
+    \item Record actual steering angle, steering command, and encoder counts.
+\end{enumerate}
+
+The simulated steering response follows the commanded angle with a modest rise
+time and minimal overshoot. The response is dominated by the mechanical
+bandwidth of the steering motor and the gains chosen for the steering PI
+controller. Saturation and rate limits on the steering effort prevent
+unrealistic accelerations at the steering rack.
+
+The encoder feedback tracks the commanded position without significant steady
+error once the controller has settled. In simulation, the quantization from
+encoder counts is visible but does not cause instability.
+
+% Figure: Simulated steering step response (steering angle vs time)
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/Results/Figure_3.png}
+    \caption{Results for Step Response to brake Controller}
+    \label{fig:drive_response}
+\end{figure}
+\clearpage
+
+\section{Hardware-in-the-Loop and Bench Testing}
+\label{sec:hil_results}
+
+Beyond pure Gazebo runs, the controller firmware was exercised in a
+hardware-in-the-loop configuration. In this mode, the C2000 board runs the
+Simulink-generated code and exchanges commands and encoder counts either with
+Gazebo (through the simulation bridge) or with the real actuators on the cart.
+
+\subsection{Test Setup}
+\label{sec:hil_setup}
+
+For bench testing, the C2000 was connected to:
+
+\begin{itemize}
+    \item The Kelly motor controller for traction drive,
+    \item The steering motor driver and encoder,
+    \item The brake actuator driver and feedback,
+    \item A USB--serial link to a development machine running ROS~2.
+\end{itemize}
+
+Initial tests were performed with the rear wheels off the ground to avoid
+uncontrolled vehicle motion. This allowed the speed and brake controllers to
+be exercised without loading the drivetrain, and the steering controller to be
+tested through its full range.
+
+% Figure: Photo or diagram of HIL / bench test setup
+
+\subsection{Longitudinal Control Results on Hardware}
+\label{sec:hil_long_results}
+
+On the bench, the speed controller was driven by synthetic step commands sent
+from a ROS~2 node over the serial interface. The motor speed was measured from
+the encoder and converted to linear speed using the wheel radius and gear
+ratio.
+
+Compared to simulation, the measured response shows similar shape but with a
+slightly longer rise time, reflecting the real inertia and friction of the
+drivetrain. The controller still converges to the commanded speed without
+sustained oscillation, and the steady-state error remains small once the
+system has settled.
+
+The brake controller was tested by commanding transitions from a finite speed
+down to zero. With the cart on stands, the brake actuator consistently brought
+the wheels to a stop. Some differences from simulation appear in the last
+portion of the response due to actuator backlash and mechanical compliance,
+but the overall behavior matches the intended design.
+
+% Figure: Measured speed step response on hardware
+% Figure: Measured braking response on hardware
+
+\subsection{Steering Control Results on Hardware}
+\label{sec:hil_steer_results}
+
+The steering controller was validated by commanding steps in desired steering
+angle while logging encoder counts and motor current. With the front wheels
+off the ground, the controller tracks setpoints across the usable range of
+steering angles.
+
+The measured response shows that the controller reaches the commanded angle
+without excessive overshoot. Some small steady-state offsets appear at the
+extremes of travel, which are attributed to mechanical limits and encoder
+indexing. In practice, these offsets are within a few encoder counts and are
+acceptable for low-speed maneuvering.
+
+Under load on the ground, the steering motor current increases as expected,
+but the closed-loop response remains stable. Further tuning could reduce the
+time to reach large steering commands under load, but the basic control
+structure is sound.
+
+% Figure: Measured steering step response on hardware
+
+\section{Summary and Limitations}
+\label{sec:results_summary}
+
+Overall, the results demonstrate that:
+
+\begin{itemize}
+    \item The longitudinal speed and brake controllers behave as intended in
+          simulation, with smooth responses and small steady-state error,
+    \item The steering controller tracks commanded angles within the mechanical
+          limits of the steering mechanism,
+    \item The C2000 firmware, serial interface, and ROS~2 bridge operate
+          correctly in both simulation and bench tests.
+\end{itemize}
+
+The main limitations of the current results are:
+
+\begin{itemize}
+    \item Full GPS waypoint following, including closed-loop path tracking with
+          the high level controller, was not completed in time for this report.
+          As a result, there are no end-to-end autonomous drive runs to
+          present.
+    \item On-cart testing of the controllers was constrained by available time
+          and test conditions, so the data set is limited compared to what
+          would be required for full production validation.
+\end{itemize}
+
+Despite these limitations, the combination of simulation-based validation and
+hardware tests confirms that the low-level control architecture is viable and
+that the software and hardware layers integrate as designed. The step response
+figures and HIL plots to be added in this chapter will serve as a concise
+visual summary of the project’s technical outcomes.

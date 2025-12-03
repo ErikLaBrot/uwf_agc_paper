@@ -1,17 +1,361 @@
-\chapter{Low Level Control Implementation}
-[Discuss controller implemenation on C2000 leveraging TI hardware and Matlab tools]
-As mentioned in previous chapters, the platform was upgraded to a Texas Instruments C2000 based microcontroller.
-Specifically, the TI F28379D LaunchpadXL. The hardware peripherals this microcontroller provides are capable of replacing 
-the original multiple microcontroller design with overhead for later extension. 
+\chapter{Low-Level Control Implementation}
+\label{chap:llc_implementation}
+This chapter describes how the low level controllers run on the  F28379D C2000 microcontroller,
+how the PI gains are chosen from a target settling time using the design equations from Section~\ref{chap:low_level_control_design},
+and how the Simulink model is organized so the same controller logic runs in simulation and on hardware
 
-Additionally, its integration with software tools like MATLAB and Simulink is leveraged to simplify controller implementation, 
-as well as increase transparency and enable an enhanced level of documentation.
-\section{TI c2000 Microcontroller}
-[Discuss advantages of TI c2000 microcontroller over other mcus]
+\section{Role of the C2000 in the Control Stack}
+\label{sec:c2000_role}
+The C2000 board closes the low level loops for speed and steering, and interfaces with the high level controller.
+It is situated between the high level computer and the power electronics for the traction motor and steering actuator
+In this project the C2000 is responsible for:
 
-\section{MATLAB Toolbox for c2000 Microcontroller}
-[Discuss MATLAB integration of project]
+\begin{itemize}
+    \item Receives target longitudinal speed and target steering angle from the high level controller
+    \item Measures vehicle speed and steering angle from onboard sensors
+    \item Runs three PI controllers: throttle, brake, and steering
+    \item Outputs analog throttle and brake commands and a PWM style steering command
+    \item Reports basic telemetry and fault status back to the high level controller
+\end{itemize}
 
-\section{Simulink Model}
-[Discuss derived Simulink Model as realized control system]
+\section{C2000 Peripherals}
+\label{sec:c2000_peripherals}
 
+The low level controller runs on the F28379D and uses four main peripheral groups.
+These peripherals provide the physical interfaces to the traction motor controller, brake actuator,
+steering hardware, and the high level computer.
+
+\subsection{DAC Outputs for Throttle and Brake}
+\label{subsec:dac}
+
+Throttle and brake commands are analog voltages.
+The LaunchXL-F28379D provides DAC outputs implemented internally using ePWM channels and an on board low pass filter.
+
+Each longitudinal PI controller produces a normalized command in \([0,1]\)
+This value is written to a DAC block, which generates a filtered output is a 0\,V to 3\,V signal at the header.
+
+One DAC channel drives the Kelly KLS-D motor controller pedal input through an external 0\,V to 5\,V scaling circuit.
+A second DAC channel drives the brake actuator interface with a 0\,V to 5\,V scaling circuit.
+This gives independent analog outputs for the throttle and brake PI controllers.
+
+\subsection{GPIO for Direction and Brake Control}
+\label{subsec:gpio}
+
+Digital GPIO pins provide the discrete control signals required by the Kelly KLS-D.
+These pins are driven directly from logic in the low level controller.
+
+\begin{itemize}
+    \item Forward and reverse direction selection for the KLS
+    \item Parking engine brake for KLS
+    \item Throttle signal source selection
+\end{itemize}
+
+\subsection{QEP for Speed Measurement}
+\label{subsec:qep}
+
+Wheel speed is measured using a quadrature encoder and a C2000 QEP unit.
+The QEP hardware counts encoder edges and exposes a position count that is read once per control step.
+This hardware count is then differentiated over control steps to measure wheel velocity, or compared directly
+to an initial value to find steering angle.
+
+\subsection{SCI for High-Level Communication and Sim Bridge}
+\label{subsec:sci}
+
+Serial Communication Interface (SCI) ports connect the C2000 to the rest of the system.
+The same peripheral family is used for three roles:
+
+\begin{itemize}
+    \item Command and telemetry link to the high level compute
+    \item Packetized serial link to the steering motor controller
+    \item Sim bridge connection for hardware-in-the-loop operation with a software plant
+\end{itemize}
+
+Over these links the low level controller receives target speed \(v^*\), target steering angle \(\delta^*\),
+mode and enable commands, and returns measured speed \(v\), steering angle \(\delta\),
+and controller status and fault flags. One of these links is dedicated to interfacing with the steering motor controller 
+using packetized serial mode.
+
+\section{PI Gain Selection}
+\label{sec:llc_pi_gain_selection}
+
+The PI gains for all low level loops are taken directly from the design result in Chapter~5
+For an integrator plant
+\begin{equation}
+    G_x(s) = \frac{g_x}{s}
+\end{equation}
+with a PI compensator
+\begin{equation}
+    C_x(s) = K_{p,x} + \frac{K_{i,x}}{s},
+\end{equation}
+the derivation in Section~5.2.1 shows that matching the closed loop characteristic polynomial to a standard
+second order form gives
+\begin{equation}
+    K_{p,x} = \frac{2 \zeta_x \omega_{n,x}}{g_x},
+    \qquad
+    K_{i,x} = \frac{\omega_{n,x}^2}{g_x}.
+    \label{eq:generic_kp_ki_llc}
+\end{equation}
+
+For each loop \(x\) the only design choice is the damping ratio \(\zeta_x\) and natural frequency \(\omega_{n,x}\)
+The natural frequency is expressed in terms of a target \(2\%\) settling time \(t_{s,x}\) using the standard second order approximation
+\begin{equation}
+    t_{s,x} \approx \frac{4}{\zeta_x \omega_{n,x}}
+    \quad \Rightarrow \quad
+    \omega_{n,x} = \frac{4}{\zeta_x t_{s,x}}.
+    \label{eq:omega_from_ts_llc}
+\end{equation}
+Given \(\zeta_x\) and \(t_{s,x}\), \(\omega_{n,x}\) is computed from \eqref{eq:omega_from_ts_llc} and the gains follow directly from
+\eqref{eq:generic_kp_ki_llc}
+
+\subsection{Drive Motor PI Gains}
+\label{subsec:drive_pi_gains_llc}
+
+In the drive domain the plant gain is \(g_x = g_d\) as defined in Chapter~5
+The speed loop uses a damping ratio \(\zeta_v\) and settling time \(t_{s,v}\)
+The resulting gains are
+\begin{equation}
+    K_{p,v} = \frac{2 \zeta_v \omega_{n,v}}{g_d},
+    \qquad
+    K_{i,v} = \frac{\omega_{n,v}^2}{g_d},
+\end{equation}
+with \(\omega_{n,v}\) obtained from \eqref{eq:omega_from_ts_llc} using \(t_{s,v}\) and \(\zeta_v\)
+
+\subsection{Brake PI Gains}
+\label{subsec:brake_pi_gains_llc}
+
+The brake loop uses the same structure with plant gain \(g_b\)
+A damping ratio \(\zeta_b\) and settling time \(t_{s,b}\) are chosen for the braking response
+The gains are
+\begin{equation}
+    K_{p,b} = \frac{2 \zeta_b \omega_{n,b}}{g_b},
+    \qquad
+    K_{i,b} = \frac{\omega_{n,b}^2}{g_b},
+\end{equation}
+with \(\omega_{n,b}\) computed from \eqref{eq:omega_from_ts_llc}
+
+\subsection{Steering PI Gains}
+\label{subsec:steering_pi_gains_llc}
+
+The steering loop is modeled as an integrator with gain \(g_\delta\)
+Using a damping ratio \(\zeta_\delta\) and target steering settling time \(t_{s,\delta}\),
+the steering PI gains are
+\begin{equation}
+    K_{p,\delta} = \frac{2 \zeta_\delta \omega_{n,\delta}}{g_\delta},
+    \qquad
+    K_{i,\delta} = \frac{\omega_{n,\delta}^2}{g_\delta},
+\end{equation}
+again with \(\omega_{n,\delta}\) computed from \eqref{eq:omega_from_ts_llc}
+
+In the implementation all three loops use the same nominal damping ratio,
+\(\zeta_v = \zeta_b = \zeta_\delta = 0.7\),
+so the primary tuning knobs are the settling times \(t_{s,v}\), \(t_{s,b}\), and \(t_{s,\delta}\)
+Once the gains \(g_d\), \(g_b\), and \(g_\delta\) are fixed from the Chapter~5 models,
+the PI gains follow directly from the expressions above
+
+\section{Simulink Implementation}
+\label{sec:simulink_impl_llc}
+
+The implementation method is programming the F28379D using the embedded coder workflow combined with the C2000 toolbox for Matlab and Simulink.
+This allows for the c2000 family of microcontrollers to be programmed using Simulink system diagrams. The advantage is that systems can be represented
+graphically before being converted into code, which presents as a more readable and understandable format.
+
+Each major function is implemented as a referenced subsystem. Referenced subsystems allow for functionality to be contained in an isolated
+module, where logic, inputs, and outputs can be defined and then used elsewhere. The design pattern is similar to functional programming in that logic and implementation
+are kept seperate to allow for clarity and maintainability. The subsystem modules are listed, then explored in detail in this section.
+
+\subsection{Referenced Subsystems and Harnesses}
+\label{subsec:harnesses_llc}
+At the top level, the simulation harness contains the following subsystems:
+
+\begin{itemize}
+    \item \texttt{uart\_subsystem} -- command and telemetry link to the high level computer.
+    \item \texttt{speed\_error\_sub} -- speed estimation, error generation, and drive/brake mode selection.
+    \item \texttt{kls\_motor\_interface} -- mapping of longitudinal control signals to KLS throttle, brake, and relay outputs.
+    \item \texttt{brake\_subsystem} -- brake PI controller and brake command generation.
+    \item \texttt{openloop\_steering\_subsystem} -- steering command and steering encoder emulation.
+    \item \texttt{sim\_bridge} -- interface between the controller and the simulated plant.
+\end{itemize}
+
+The platform harness instantiates the same set of subsystems, but connects their ports to C2000 peripheral blocks instead of the
+simulation bridge.
+
+\subsection{\texttt{uart\_subsystem}}
+\label{subsec:uart_subsystem}
+
+The \texttt{uart\_subsystem} handles command and telemetry exchange with the high level computer over SCI.
+
+On the receive side, it:
+
+\begin{itemize}
+    \item Unpacks incoming bytes into motor throttle command, direction and brake flags, and steering setpoint.
+    \item Outputs these values as \texttt{MOTOR\_THR\_CMD}, \texttt{MOTOR\_THR\_DIR}, \texttt{MOTOR\_THR\_BRK}, and
+          \texttt{SHAFT\_ANGLE\_CMD}.
+\end{itemize}
+
+On the transmit side, it:
+
+\begin{itemize}
+    \item Receives \texttt{MOTOR\_RPM} and \texttt{SHAFT\_ANGLE} from the rest of the model.
+    \item Packs these signals into a byte stream and transmits them back to the computer.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Jetson_Bridge.pdf}
+    \caption{\texttt{uart\_subsystem} for high level command and telemetry}
+    \label{fig:uart_subsystem}
+\end{figure}
+
+\subsection{\texttt{speed\_error\_sub}}
+\label{subsec:speed_error_subsystem}
+
+The \texttt{speed\_error\_sub} block implements the longitudinal speed estimation and error logic that is shared by the drive and brake paths.
+
+It:
+
+\begin{itemize}
+    \item Receives the target speed from the computer as \texttt{TARGET\_VEL}.
+    \item Receives simulated encoder counts from the plant as \texttt{DRIVE\_ENC}.
+    \item Converts encoder counts to motor speed \texttt{MOTOR\_RPM}.
+    \item Computes the velocity error \texttt{VEL\_ERR} between commanded and measured speed.
+    \item Generates enable flags \texttt{DRIVE\_EN} and \texttt{BRK\_EN} based on the sign and magnitude of the error.
+\end{itemize}
+
+The \texttt{VEL\_ERR} signal is fed to both the \texttt{kls\_motor\_interface} and the \texttt{brake\_subsystem}.
+\texttt{DRIVE\_EN} and \texttt{BRK\_EN} gate the corresponding loops so that only one of drive or brake is active at a time.
+\texttt{MOTOR\_RPM} is returned to the \texttt{uart\_subsystem} for telemetry.
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Velocity_Error_Subsys.pdf}
+    \caption{\texttt{speed\_error\_sub} for speed estimation and mode selection}
+    \label{fig:speed_error_sub}
+\end{figure}
+
+\subsection{\texttt{kls\_motor\_interface}}
+\label{subsec:kls_interface}
+
+The \texttt{kls\_motor\_interface} converts the longitudinal control signals into commands compatible with the Kelly KLS motor controller.
+
+Inputs to this subsystem are:
+
+\begin{itemize}
+    \item \texttt{THROTTLE\_BRK} -- combined longitudinal command (in simulation, this is driven from the brake and drive logic).
+    \item \texttt{VEL\_ERROR} -- velocity error from \texttt{speed\_error\_sub}.
+    \item \texttt{DRIVE\_EN} -- enable signal for the drive PI loop.
+\end{itemize}
+
+The subsystem:
+
+\begin{itemize}
+    \item Applies the drive PI controller to \texttt{VEL\_ERROR} when \texttt{DRIVE\_EN} is asserted.
+    \item Maps the PI output to a DAC command for the KLS pedal input.
+    \item Drives GPIO outputs for \texttt{FWD\_REL}, \texttt{REV\_REL}, and \texttt{BRK\_REL} to select direction and braking mode.
+    \item Produces \texttt{SIM\_VEL\_CMD}, a normalized drive command used by the simulation bridge in the simulation harness.
+\end{itemize}
+
+In the platform harness, \texttt{DAC\_CMD} and relay outputs connect directly to C2000 DAC and GPIO blocks.
+In the simulation harness, \texttt{SIM\_VEL\_CMD} is routed to the \texttt{sim\_bridge} and the hardware-specific outputs are left unconnected or used for monitoring.
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Drive_Controller.pdf}
+    \caption{\texttt{kls\_motor\_interface} for KLS throttle, brake, and relay control}
+    \label{fig:kls_motor_interface}
+\end{figure}
+
+\subsection{\texttt{brake\_subsystem}}
+\label{subsec:brake_subsystem_llc}
+
+The \texttt{brake\_subsystem} contains the brake PI controller and generates the brake command used in both hardware and simulation.
+
+It receives:
+
+\begin{itemize}
+    \item \texttt{OUTPUT\_EN} -- brake enable signal, driven from \texttt{BRK\_EN}.
+    \item \texttt{VEL\_ERROR} -- velocity error from \texttt{speed\_error\_sub}.
+\end{itemize}
+
+When \texttt{OUTPUT\_EN} is high, the subsystem:
+
+\begin{itemize}
+    \item Applies the brake PI controller to \texttt{VEL\_ERROR} using the gains from Section~\ref{sec:llc_pi_gain_selection}.
+    \item Generates a DAC level \texttt{DAC\_CMD} for the brake actuator interface.
+    \item Generates a normalized brake command \texttt{SIM\_BRK\_CMD} for the simulated plant.
+\end{itemize}
+
+In the platform harness, \texttt{DAC\_CMD} is routed to a C2000 DAC channel that drives the physical brake actuator.
+In the simulation harness, \texttt{SIM\_BRK\_CMD} is connected to the \texttt{sim\_bridge}.
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Brake_Controller.pdf}
+    \caption{\texttt{brake\_subsystem} implementing the brake PI controller}
+    \label{fig:brake_subsystem}
+\end{figure}
+
+\subsection{\texttt{openloop\_steering\_subsystem}}
+\label{subsec:steering_subsystem_llc}
+
+The \texttt{openloop\_steering\_subsystem} handles steering commands and steering encoder emulation.
+
+Inputs are:
+
+\begin{itemize}
+    \item \texttt{STEER\_EN} -- steering enable signal.
+    \item \texttt{STEER\_SETPOINT} -- desired steering angle from \texttt{SHAFT\_ANGLE\_CMD}.
+    \item \texttt{ENC\_INP} -- steering encoder feedback from the simulated plant or hardware.
+\end{itemize}
+
+The subsystem:
+
+\begin{itemize}
+    \item Shapes and limits the steering command based on \texttt{STEER\_SETPOINT} and \texttt{STEER\_EN}.
+    \item Outputs a normalized steering command \texttt{STEER\_CMD} to the steering motor driver (platform) or \texttt{sim\_bridge} (simulation).
+    \item Processes encoder feedback to produce \texttt{STEER\_ENC\_CNT} and \texttt{STEER\_ENC\_ROT} signals.
+    \item Returns a shaft angle estimate to the \texttt{uart\_subsystem} for telemetry.
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Steering_Controller.pdf}
+    \caption{\texttt{openloop\_steering\_subsystem} for steering command and encoder processing}
+    \label{fig:openloop_steering_subsystem}
+\end{figure}
+
+\subsection{\texttt{sim\_bridge}}
+\label{subsec:sim_bridge_llc}
+
+The \texttt{sim\_bridge} connects the controller to the software plant during simulation.
+
+On the command side it receives:
+
+\begin{itemize}
+    \item \texttt{THROTTLE\_CMD} from \texttt{kls\_motor\_interface} (\texttt{SIM\_VEL\_CMD}).
+    \item \texttt{BRAKE\_CMD} from \texttt{brake\_subsystem} (\texttt{SIM\_BRK\_CMD}).
+    \item \texttt{STEER\_CMD} from \texttt{openloop\_steering\_subsystem}.
+\end{itemize}
+
+On the feedback side it outputs:
+
+\begin{itemize}
+    \item \texttt{DRIVE\_ENC} -- simulated drive encoder counts to \texttt{speed\_error\_sub}.
+    \item \texttt{STEER\_ENC} -- simulated steering encoder feedback to \texttt{openloop\_steering\_subsystem}.
+    \item \texttt{SIM\_CONNECTED} -- a status flag used to gate commands when the plant connection is not valid.
+\end{itemize}
+
+Internally, the \texttt{sim\_bridge} handles packetization and transport over the serial or socket interface to the host simulation.
+The controller model itself remains unaware of whether the plant is simulated or physical; it only sees encoder feedback and status flags at its ports.
+
+\begin{figure}[h]
+    \centering
+    % TODO replace with actual Simulink screenshot
+    \includegraphics[width=\linewidth]{figures/c2000_implementation/Simulation_Bridge.pdf}
+    \caption{\texttt{sim\_bridge} interface between the controller and simulated plant}
+    \label{fig:sim_bridge}
+\end{figure}
